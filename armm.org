@@ -1,0 +1,20 @@
+:PROPERTIES:
+#+TITLE: armm
+#+PROPERTY: header-args:R :session *R:armm:* :eval never-export :exports code
+#+PROPERTY: header-args:python :session *Python[armm]* :eval never-export :exports code
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+OPTIONS: num:nil
+#+OPTIONS: ^:nil
+#+OPTIONS: toc:nil
+#+OPTIONS: tex:imagemagick
+:END:
+
+* setup
+[[http://www.stat.columbia.edu/~gelman/arm/][website]]
+
+#+name: r setup
+#+begin_src R
+  ## install.packages('arm')
+  library(arm)
+#+end_src
+* chapter 6
