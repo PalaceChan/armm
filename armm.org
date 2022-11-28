@@ -15,6 +15,76 @@
 #+name: r setup
 #+begin_src R
   ## install.packages('arm')
-  library(arm)
+  ## install.packages('ROCR')
+  ## install.packages('haven')
+  ## install.packages('lmtest') # for lrtest
+  ## install.packages('GGally') # ggpairs
+  ## install.packages('ggeffects') # ggpredict
+  ## install.packages('ordinal') # clm alternative to MASS::polr
+  library(ggplot2)
+  library(data.table)
+  setwd('~/development/armm')
 #+end_src
 * chapter 6
+Deviance of model given by
+
+$$D(y, \hat{u}) = 2 \left( \log(p(y | \hat{\theta}_s)) - \log(p(y | \hat{\theta}_p))\right)$$
+
+where $\hat{u}$ is the estimate, the parameters are the saturated one (as many params as obs so perfect fit) and the proposed one. So it is a diff in log likelihood between the saturated and the proposed
+
+the default residuals are the deviance residuals which are the square roots of unit deviances (the sum of their squares is the reported residual deviance)
+
+good references:
+https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
+https://bookdown.org/ltupper/340f21_notes/deviance-and-residuals.html
+
+** 6.10.1
+couples and women_alone are indicators, when both zero it is the control group. bs_hiv is baseline hiv negative or positive, bupacts is baseline acts and fupacts is the follow-up acts y
+no obvious "exposure" / "offset" to use but idea is $y_i \sim \text{Poiss}(\theta_i)$ with $\theta_i = e^{X_i \beta}$
+
+~fitted(m)~ is the value of the $\theta_i$ given the coefs (so same as ~predict(m, ... type='response')~
+~fitted(m) - y~ is the same as ~residuals(m, type='response')~
+
+#+begin_src R
+  rb <- data.table(haven::read_dta(url('http://www.stat.columbia.edu/~gelman/arm/examples/risky.behavior/risky_behaviors.dta')))
+  ## attributes(rb$fupacts)
+
+  m0 <- rb[, glm(fupacts ~ couples + women_alone, family = poisson)]
+  m0$null.deviance - m0$deviance # >> 2 so predictive
+
+  ## if Poiss model is true, sqrt(mean) should be the std dev
+  z0 <- residuals(m0, type='pearson') # (y_i - \hat{y}_i) / sqrt(\hat{y}_i)
+  ## z0 <- (rb$fupacts - m0$fitted.values) / sd(m0$fitted.values) # this is wrong...
+
+  sum(z0^2) # is chi-square n-k df (which has mean n-k) so calc overdispersion factor
+  sum(z0^2)/m0$df.residual # 44
+  pchisq(sum(z0^2), m0$df.residual) # 1
+  summary(rb[, glm(fupacts ~ couples + women_alone, family = quasipoisson)])
+
+  m1 <- rb[, glm(fupacts ~ ., family = poisson, data = .SD)]
+  m0$deviance - m1$deviance # ~2.7k
+
+  z1 <- residuals(m1, type = "pearson")
+  sum(z1^2)/m1$df.residual # 30
+  pchisq(sum(z1^2), m1$df.residual) # 1
+
+  m2 <- rb[, glm(fupacts ~ ., family = quasipoisson, data = .SD)]
+  summary(m2)$dispersion #30
+#+end_src
+** 6.10.2
+https://marissabarlaz.github.io/portfolio/ols/
+for likelihood ratio testing: https://bookdown.org/ltupper/340f21_notes/glm-inference-tests.html#likelihood-ratio-tests
+
+#+begin_src R
+  x <- data.table(haven::read_dta(url('http://www.stat.columbia.edu/~gelman/arm/examples/nes/nes5200_processed_voters_realideo.dta')))
+  lapply(x, function(y) attributes(y)$label)
+  y <- x[ ,.(partyid7, ideo_feel, ideo7, ideo, age, gender, race, religion, educ1)]
+  y[, partyid7 := factor(partyid7, levels = attributes(x$partyid7)$labels[2:8], labels = names(attributes(x$partyid7)$labels[2:8]), ordered = T)]
+  y[, ideo7 := factor(ideo7, levels = attributes(x$ideo7)$labels[2:8], labels = names(attributes(x$ideo7)$labels[2:8]))]
+  y[, gender := factor(gender, levels = attributes(x$gender)$labels[2:3], labels = names(attributes(x$gender)$labels[2:3]))]
+  y[, race := factor(race, levels = attributes(x$race)$labels[1:6], labels = names(attributes(x$race)$labels[1:6]))]
+  y[, religion := factor(religion, levels = attributes(x$religion)$labels[2:5], labels = names(attributes(x$religion)$labels[2:5]))]
+  y[, educ1 := factor(educ1, levels = attributes(x$educ1)$labels[2:5], labels = names(attributes(x$educ1)$labels[2:5]))]
+  m <- y[, MASS::polr(partyid7 ~ ideo7 + ideo_feel + race + religion + educ1, Hess = T)]
+  # m2 <- y[, ordinal::clm(partyid7 ~ ideo7 + ideo_feel + race + religion + educ1)]
+#+end_src
