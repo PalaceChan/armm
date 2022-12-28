@@ -16,7 +16,7 @@
 #+begin_src R
   ## install.packages('arm')
   ## install.packages('ROCR')
-  ## install.packages('haven')
+  ## install.packages('haven') # to read stata dta files or install.packages('foreign') and use read.dta
   ## install.packages('lmtest') # for lrtest
   ## install.packages('GGally') # ggpairs
   ## install.packages('ggeffects') # ggpredict
@@ -88,3 +88,58 @@ for likelihood ratio testing: https://bookdown.org/ltupper/340f21_notes/glm-infe
   m <- y[, MASS::polr(partyid7 ~ ideo7 + ideo_feel + race + religion + educ1, Hess = T)]
   # m2 <- y[, ordinal::clm(partyid7 ~ ideo7 + ideo_feel + race + religion + educ1)]
 #+end_src
+* chapter 9 (causal inference)
+https://www.stat.cmu.edu/~larry/=sml/Causation.pdf
+https://stats.stackexchange.com/questions/599833/control-for-post-treatment-variables-vs-omitted-variable-bias
+https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/
+
+* chapter 10
+** issues with imbalance in confounding covariate distributions
+page 200:
+
+in a causal inference, under randomization one has $y_i ~ \beta_0 + \theta T + \epsilon$ so $\theta$ is the difference of means between treatment and control (and captures the effect of $T$) - but if we have to include a confounding covariate to preserve ignorability we get
+$y_i = m(x) + \theta + \epsilon$ for treatment ($m(x)$ the regression) and $y_i = m(x) + \epsilon$ for control and the difference of averages now results in $\hat{\theta} = \bar{y_1} - \bar{y_0} - \sum_i \beta_i (\bar{x}_{1,i} \bar{x}_{0,i})$ for each of the confounding covariates.
+the observation is that unless the covariate distribution is /well balanced/ across the groups the extra terms will not cancel and will thwart the estimate of the effect size by the degree of difference in the distributions (and also the degree of model mis-specification)
+
+from:
+http://econometricsense.blogspot.com/2011/01/instrumental-variables-ivs.html
+** matching
+package in R: https://cran.r-project.org/web/packages/MatchIt/vignettes/MatchIt.html
+few things one can do with propensity scores besides use them for matching is to sub-classify by buckets of them to get effect estimates by level (and could weighted average those) or to use them as weights and use the full data (so e.g. weight of $1/p_i$ for treated and $1/(1-p_i)$ on control.
+those weights say "if you are treated but unlikely to have been, emphasize more" or "if you are in control but were unlikely to be in control, emphasize more" with the aim of morphing the data-set to look more like a true random experiment.
+** ivs
+in book motivation for this is introduced when a confounding covariate is not available so one has, e.g. $u \rightarrow x \rightarrow y \leftarrow u$ but $u$ is missing in the data and not being able to include it prevents estimation of $x$ effect on $y$. The idea is to
+find a "proxy" $z$ that is correlated with $x$ and $y$ (but only via $x$) and not correlated to $u$ (https://www.youtube.com/watch?v=5h_W75p0ggA)
+
+in text pg 219 he gets the iv estimator of the effect of instrument /encouraged/ (for treatment /watched/) on outcome /y/ by finding $\beta$ in the regression $\text{watched} ~ \text{encouraged}$ and $\gamma$ in the regression $y ~ \text{encouraged}$ and dividing them:
+$\gamma / \beta$. This makes sense because suppose one has $y ~ \beta x + \epsilon$ and instrument $z$, then note that $s_{yz} = \beta s_{xz} + s_{\epsilon z}$ where the latter is zero ($z$ is an IV) and $s_{xz} \neq 0$ (same reason, $z$ an IV) so that
+$\beta = s_{yz} / s_{xz}$ in the two regressions we have $\gamma = s_{yz} / s_{zz}$ and $\beta = s_{xz} / s_{zz}$ so the ratio $\gamma / \beta$ is $s_{yz} / s_{xz}$
+
+also, the two stage regression is intuitive/equivalent to above because from $x ~ z$ we get $\hat{x} = s_{xz} / s_{zz} z$ and then doing $y ~ \hat{x}$ gives us coeff $\text{cov}(y, \hat{x}) / \text{cov}(\hat{x}, \hat{x})$ but plugging in the expression for $\hat{x}$
+this gives us:
+
+$$\frac{\frac{s_{xz}}{s_zz} s_{yz}}{\frac{s_xz}{s_zz} \frac{s_xz}{s_zz} s_{zz}}$$
+
+which simplifies to $s_{yz} / s_{xz}$ as well
+
+another useful way to think about an instrumental variable $z$ for a treatment $T$ is via the two equations:
+
+$$T = \alpha z + \epsilon$$
+and
+$$y = \beta T + \nu$$
+
+taking conditional expectations with regards to $z$ (regressing on $z$) yields
+$$\mathbb{E}(y | z) = \beta \mathbb{E}(T | z) + \mathbb{E}(\nu | z)$$
+
+the assumption required of an IV is that it affect $y$ only through its effect on $T$, implying $\mathbb{E}(\nu | z) = 0$ which then implies we can solve for $\beta$ by dividing $\mathbb{E}(y | z)$ by $\mathbb{E}(T | z)$
+
+the two stage regression is in package =sem= (structurual equation modeling) because IVs show up there. In structural equation one has endogenous variables as regressors, e.g.: $y_1 = f(x_1, y_2) + \epsilon_1$ and $y_2 = f(x_2, y_1) + \epsilon_2$.
+There one has $\text{Cov}(y_2, \epsilon_1) != 0$ (increase $\epsilon_1$ increases $y_1$ but since it is a predictor for $y_2$ it increases $y_2$. Here, to systematically build an IV (correlated with the outcome, but not the error) one does a first stage pass regressions:
+$z_1 = y_1 ~ f(x_1, x_2) + \epsilon_1$ and $z_2 = y_2 ~ f(x_1, x_2) + \epsilon_2$ where $z_i$ (the IVs) will be uncorrelated to both $\epislon_i$ and then one can use those in the original equations in lieue of the corresponding $y_i$ and estimate a second pass regression.
+
+https://engineering.purdue.edu/~flm/CE615_files/3SLS-lecture.pdf
+^ one can also conduct /indirect least squares/ by plugging in one equation into the other to get rid of the problem and then using regular OLS on that. The issue is while that is fine for prediction only, for inference one cares about the original parameter estimates which cannot always be unraveled from that regression
+* errata
+pg 203 bottom paragraph "necessarily necessarily"
+pg 219 last R code snippet is the reciprocal of what it should be dividing to get the wald estimate
+pg 221 rearranged equation 10.7 denominator should be $\gamma_1$ not $\gamma_2$ (and the sentence immediately after also mentions $\gamma_2$ but should be $\gamma_1$)
