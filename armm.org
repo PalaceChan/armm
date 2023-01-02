@@ -139,7 +139,37 @@ $z_1 = y_1 ~ f(x_1, x_2) + \epsilon_1$ and $z_2 = y_2 ~ f(x_1, x_2) + \epsilon_2
 
 https://engineering.purdue.edu/~flm/CE615_files/3SLS-lecture.pdf
 ^ one can also conduct /indirect least squares/ by plugging in one equation into the other to get rid of the problem and then using regular OLS on that. The issue is while that is fine for prediction only, for inference one cares about the original parameter estimates which cannot always be unraveled from that regression
+* chapter 12
+"bayesian inference" (to understand theoretical background behind multilevel models) references:
+Box and Tiao: https://www.amazon.com/Bayesian-Inference-Statistical-Analysis-George/dp/0471574287
+lmer package (lme4 https://cran.r-project.org/doc/Rnews/Rnews_2005-1.pdf)
+
+intraclass correlation (pg 258, in the random effects modeling framework the icc is the correlation of two observations in the same group)
+https://en.wikipedia.org/wiki/Intraclass_correlation
+
+** general high level intuition for the random intercept vs the classical least squares estimate with dummies
+the "fixed effect" estimate of intercepts per group is "low information" in small sample size groups as the estimate is just the average $y$ in that group. One way to see this last bit is that indicator variables are orthogonal to each other, therefore the precision matrix $(X^tX)^{-1}$
+will have zero off-diagonal elements (zero partial correlations) and the diagonal elements will be of the form $1/\text{cov}(r_i, r_j)$ but $r_i$ is the same as $x_i$ because of the orthogonality so we just get the standard estimates $s_{xy} / s_{xx}$ but $s_{xx}$ for an indicator
+is just the count and $s_{xy}$ is just the partial sum and so that is indeed the mean of $y$ in that group. The standard error of this mean is $\sqrt{N}$ for $N$ the obs count. If we instead model the intercept for the group by belonging to a distribution $N(\mu_\alpha, \sigma_\alpha^2)$
+and the variance $\sigma_\alpha$ is at least $1/N$ the overall residual variance then there is more information in it to estimate a group of size smaller than $N$ than the fixed effect estimate in that group. Thus when the between group variance is small, this limit $N$ would get bigger
+and the estimate would "pool more" and shrink toward the mean $\mu_\alpha$ (or $\hat{\alpha}$ if we have group level predictors) which is intuitive as it implies the groups are not very different
+(on the other hand as $\sigma_\alpha^2$ grows $N$ goes toward 0 meaning the groups are so different that we "fall back" to classical regression estimates)
+
+therefore, the multi-level estimate is a "smooth" in-between/trade-off between the classical single intercept or multi intercept "fixed effect" models, in-betweenness determined statistically from the between group variance
+
+cool thing to note here (pg 268) is that if one introduces good group-level predictors (useless in the classical regression with dummies because they are group level so zero variance within-group) then one can reduce $\sigma_\alpha^2$ (smaller group-level regression residual variance) and thus improve
+the "$N$" situtation described above (this also mentioned top of pg 271 as a great advantage of multi level modeling)
+** random effects as errors
+(pg 265)
+
+if we leave the "intercept" in the level 1 model then the distribution of the $\alpha_j$ is centered around zero (as errors / deviations from the mean across all) so instead of
+$y_i = \alpha_{j[i]} + x_1 \beta + \epsilon_i$ and $\alpha_j ~ N(\mu_\alpha, \sigma_\alpha^2)$ we can move $\mu_\alpha$ "down" as a constant term and get
+$y_i = \mu_\alpha + x_1 \beta + \eta_{j[i]} + \epsilon_i$ with $\eta_{j} ~ N(0, \sigma_\alpha^2)$. This latter expression can be interpreted as a classical regression with correlated errors i.e.
+$y_i = X_i \beta + \epsilon_i^\text{all}$ where $\Sigma$ for the $\epsilon$ is no longer diagonal because it is $\eta_{j[i]} + \epsilon_i$ and the $\eta$ term is the same within groups so it induces correlation.
+In particular the variance for the same $i$ is $\sigma_y^2 + \sigma_\alpha^2$, for two different groups the covariance is zero, and for the same group it is $\sigma_\alpha^2$ (so note here how the ICC pops up in the correlation structure when $j[i] = j[k]$)
+
 * errata
 pg 203 bottom paragraph "necessarily necessarily"
 pg 219 last R code snippet is the reciprocal of what it should be dividing to get the wald estimate
 pg 221 rearranged equation 10.7 denominator should be $\gamma_1$ not $\gamma_2$ (and the sentence immediately after also mentions $\gamma_2$ but should be $\gamma_1$)
+pg 259 first lmer model is described as starting with the no pooling model "y ~ x", but that is the complete pooling model
